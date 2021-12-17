@@ -7,13 +7,14 @@ namespace ReflectionVsDynamicPerformance;
 [SimpleJob(launchCount: 1, warmupCount: 3, targetCount: 10, runtimeMoniker: RuntimeMoniker.Net60)]
 [MarkdownExporterAttribute.GitHub]
 [MemoryDiagnoser]
-public class BenchMarks
+public class Benchmarks
 {
 	private const int GuidCount = 1_000_000;
 	private readonly List<IDto> _dtos;
+	private readonly List<Dto<List<string>>> _dtoList;
 
 
-	public BenchMarks()
+	public Benchmarks()
 	{
 		var random = new Random(DateTimeOffset.UtcNow.Millisecond);
 
@@ -22,9 +23,12 @@ public class BenchMarks
 		var chunks = guids.Chunk(GuidCount / 512);
 
 		_dtos = new();
+		_dtoList = new();
 
 		foreach (var chunk in chunks)
 		{
+			_dtoList.Add(new(chunk.ToList()));
+
 			switch (random.Next(0, 4))
 			{
 				case 0:
@@ -41,12 +45,30 @@ public class BenchMarks
 					break;
 			}
 		}
+
+
+
 	}
 
 
 	[Benchmark]
 	[MethodImpl(MethodImplOptions.AggressiveOptimization)]
 	public long Baseline()
+	{
+		long totalLength = 0;
+		foreach (var dto in _dtoList)
+		{
+			totalLength += dto.Payload.Sum(x => x.Length);
+		}
+
+		return totalLength;
+	}
+
+
+
+	[Benchmark]
+	[MethodImpl(MethodImplOptions.AggressiveOptimization)]
+	public long SwitchCaseCast()
 	{
 		long totalLength = 0;
 		foreach (var dto in _dtos)
