@@ -9,7 +9,7 @@ namespace ReflectionVsDynamicPerformance;
 [MemoryDiagnoser]
 public class Benchmarks
 {
-	private const int GuidCount = 1_000_000;
+	private const int GuidCount = 10_000_000;
 	private readonly List<IDto> _dtos;
 	private readonly List<Dto<List<string>>> _dtoList;
 
@@ -20,7 +20,7 @@ public class Benchmarks
 
 		var guids = Enumerable.Range(0, GuidCount).Select(_ => Guid.NewGuid().ToString("N")[..random.Next(1, 32)]);
 
-		var chunks = guids.Chunk(GuidCount / 512);
+		var chunks = guids.Chunk(GuidCount / 2048);
 
 		_dtos = new();
 		_dtoList = new();
@@ -52,13 +52,13 @@ public class Benchmarks
 
 
 	[Benchmark]
-	[MethodImpl(MethodImplOptions.AggressiveOptimization)]
+	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
 	public long Baseline()
 	{
 		long totalLength = 0;
 		foreach (var dto in _dtoList)
 		{
-			totalLength += dto.Payload.Sum(x => x.Length);
+			totalLength += dto.Payload.Count;
 		}
 
 		return totalLength;
@@ -67,7 +67,7 @@ public class Benchmarks
 
 
 	[Benchmark]
-	[MethodImpl(MethodImplOptions.AggressiveOptimization)]
+	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
 	public long SwitchCaseCast()
 	{
 		long totalLength = 0;
@@ -76,16 +76,16 @@ public class Benchmarks
 			switch (dto)
 			{
 				case Dto<List<string>> list:
-					totalLength += list.Payload.Sum(x => x.Length);
+					totalLength += list.Payload.Count;
 					continue;
 				case Dto<IList<string>> list:
-					totalLength += list.Payload.Sum(x => x.Length);
+					totalLength += list.Payload.Count;
 					continue;
 				case Dto<string[]> list:
-					totalLength += list.Payload.Sum(x => x.Length);
+					totalLength += list.Payload.Length;
 					continue;
 				case Dto<IEnumerable<string>> list:
-					totalLength += list.Payload.Sum(x => x.Length);
+					totalLength += list.Payload.Count();
 					continue;
 			}
 		}
@@ -95,7 +95,7 @@ public class Benchmarks
 
 
 	[Benchmark]
-	[MethodImpl(MethodImplOptions.AggressiveOptimization)]
+	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
 	public long UsingReflection()
 	{
 		long totalLength = 0;
@@ -103,7 +103,7 @@ public class Benchmarks
 		foreach (var dto in _dtos)
 		{
 			var payload = dto.GetType().GetProperty(nameof(Dto<string>.Payload));
-			totalLength += ((IEnumerable<string>)payload.GetValue(dto)).Sum(x => x.Length);
+			totalLength += ((IEnumerable<string>)payload.GetValue(dto)).Count();
 		}
 
 		return totalLength;
@@ -111,14 +111,14 @@ public class Benchmarks
 
 
 	[Benchmark]
-	[MethodImpl(MethodImplOptions.AggressiveOptimization)]
+	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
 	public long UsingDynamic()
 	{
 		long totalLength = 0;
 		foreach (var dto in _dtos)
 		{
 			var payload = (IEnumerable<string>)((dynamic)dto).Payload;
-			totalLength += payload.Sum(x => x.Length);
+			totalLength += payload.Count();
 		}
 
 		return totalLength;
