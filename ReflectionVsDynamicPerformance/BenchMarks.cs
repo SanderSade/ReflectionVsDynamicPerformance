@@ -1,4 +1,5 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.Reflection;
+using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Jobs;
 
@@ -10,8 +11,11 @@ namespace ReflectionVsDynamicPerformance;
 public class Benchmarks
 {
 	private const int GuidCount = 10_000_000;
-	private readonly List<IDto> _dtos;
+
+
+	private static readonly Dictionary<Type, PropertyInfo> PropertyCache = new();
 	private readonly List<Dto<List<string>>> _dtoList;
+	private readonly List<IDto> _dtos;
 
 
 	public Benchmarks()
@@ -45,9 +49,6 @@ public class Benchmarks
 					break;
 			}
 		}
-
-
-
 	}
 
 
@@ -63,7 +64,6 @@ public class Benchmarks
 
 		return totalLength;
 	}
-
 
 
 	[Benchmark]
@@ -104,6 +104,28 @@ public class Benchmarks
 		{
 			var payload = dto.GetType().GetProperty(nameof(Dto<string>.Payload));
 			totalLength += ((IEnumerable<string>)payload.GetValue(dto)).Count();
+		}
+
+		return totalLength;
+	}
+
+
+	[Benchmark]
+	[MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
+	public long ReflectionWithCaching()
+	{
+		long totalLength = 0;
+
+		foreach (var dto in _dtos)
+		{
+			var type = dto.GetType();
+			if (!PropertyCache.TryGetValue(type, out var propertyInfo))
+			{
+				propertyInfo = type.GetProperty(nameof(Dto<string>.Payload));
+				PropertyCache.Add(type, propertyInfo);
+			}
+
+			totalLength += ((IEnumerable<string>)propertyInfo.GetValue(dto)).Count();
 		}
 
 		return totalLength;
